@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>محفظة Libre Network</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header>
+    <nav>
+      <ul class="nav-menu">
+        <li><a href="index.html">الرئيسية</a></li>
+        <li><a href="wallet.html" class="active">المحفظة</a></li>
+        <li><a href="mining.html">التعدين</a></li>
+        <li><a href="database.html">قاعدة البيانات</a></li>
+        <li><a href="transactions.html">المعاملات</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <main>
+    <h1>صفحة المحفظة</h1>
+
+    <!-- تسجيل الدخول / الخروج -->
+    <section id="loginSection" style="border:1px solid #444; padding:1rem; border-radius:6px; margin-bottom:20px;">
+      <h2>تسجيل الدخول / استعادة الحساب</h2>
+      <label for="loginPublicKey">المفتاح العام:</label><br/>
+      <input type="text" id="loginPublicKey" placeholder="أدخل المفتاح العام" style="width:100%; font-family: monospace;" /><br/><br/>
+      <label for="loginPrivateKey">المفتاح الخاص:</label><br/>
+      <input type="text" id="loginPrivateKey" placeholder="أدخل المفتاح الخاص" style="width:100%; font-family: monospace;" /><br/><br/>
+      <button id="loginButton">تسجيل الدخول</button>
+      <button id="logoutButton" style="display:none; margin-left:10px;">تسجيل الخروج</button>
+      <p id="loginStatus" style="margin-top:10px; font-weight:bold; color:green;"></p>
+    </section>
+
+    <!-- معلومات الحساب -->
+    <section id="accountInfo" style="margin-bottom:20px;">
+      <h2>معلومات الحساب</h2>
+      <p>عنوان المستخدم: <span id="userAddress">غير مسجل</span></p>
+      <p>الرصيد: <span id="userBalance">111111111111111111</span> LBRC</p>
+    </section>
+
+    <!-- توليد المفتاح الخاص والعام -->
+    <section id="keyGenerationSection" style="margin-top:20px; padding:1rem; border: 1px solid #444; border-radius:6px; margin-bottom:20px;">
+      <h2>توليد مفتاح خاص وعام جديدين</h2>
+      <button id="generateKeysButton">توليد المفاتيح</button>
+      <div style="margin-top:10px;">
+        <label>المفتاح الخاص:</label><br />
+        <input type="text" id="privateKey" readonly style="width:100%; font-family: monospace;" />
+      </div>
+      <div style="margin-top:10px;">
+        <label>المفتاح العام:</label><br />
+        <input type="text" id="publicKey" readonly style="width:100%; font-family: monospace;" />
+      </div>
+    </section>
+
+    <!-- نموذج إنشاء المعاملة -->
+    <section id="transactionFormSection" style="margin-top:20px; padding:1rem; border:1px solid #444; border-radius:6px; display:none;">
+      <h2>إنشاء معاملة جديدة</h2>
+
+      <label for="transactionType">نوع المعاملة:</label>
+      <select id="transactionType" name="transactionType" required>
+        <option value="" disabled selected>اختر نوع المعاملة</option>
+        <option value="send">إرسال مبلغ</option>
+        <option value="age">تزويد العمر التعدينى</option>
+        <option value="create">إنشاء حساب</option>
+        <option value="changeOwner">تغيير الملكية</option>
+        <option value="joinMiner">دخول مجمع المعدنين</option>
+      </select>
+
+      <div id="transactionFields" style="margin-top:10px;">
+        <!-- حقول المعاملة تظهر حسب النوع -->
+      </div>
+
+      <div style="margin-top:10px;">
+        <label>رسوم المعاملة: <span id="transactionFee">-</span> LBRC</label>
+      </div>
+
+      <button id="submitTransactionButton" style="margin-top:15px;">إرسال المعاملة</button>
+    </section>
+  </main>
+
+  <script>
+    // ==== تسجيل الدخول / تسجيل الخروج ====
+
+    const loginPublicKeyInput = document.getElementById("loginPublicKey");
+    const loginPrivateKeyInput = document.getElementById("loginPrivateKey");
+    const loginButton = document.getElementById("loginButton");
+    const logoutButton = document.getElementById("logoutButton");
+    const loginStatus = document.getElementById("loginStatus");
+
+    const accountAddressSpan = document.getElementById("userAddress");
+    const accountBalanceSpan = document.getElementById("userBalance");
+    const transactionFormSection = document.getElementById("transactionFormSection");
+
+    // تحميل الحساب من localStorage اذا موجود
+    function loadAccount() {
+      const savedPubKey = localStorage.getItem("pubKey");
+      const savedPrivKey = localStorage.getItem("privKey");
+      if (savedPubKey && savedPrivKey) {
+        loginPublicKeyInput.value = savedPubKey;
+        loginPrivateKeyInput.value = savedPrivKey;
+        onLoginSuccess(savedPubKey, savedPrivKey);
+      }
+    }
+
+    // حدث تسجيل الدخول
+    loginButton.addEventListener("click", () => {
+      const pubKey = loginPublicKeyInput.value.trim();
+      const privKey = loginPrivateKeyInput.value.trim();
+      if (!pubKey || !privKey) {
+        alert("يرجى إدخال المفتاح العام والخاص.");
+        return;
+      }
+      // ممكن إضافة تحقق أفضل من صحة المفاتيح هنا
+      localStorage.setItem("pubKey", pubKey);
+      localStorage.setItem("privKey", privKey);
+      onLoginSuccess(pubKey, privKey);
+    });
+
+    // حدث تسجيل الخروج
+    logoutButton.addEventListener("click", () => {
+      localStorage.removeItem("pubKey");
+      localStorage.removeItem("privKey");
+      onLogout();
+    });
+
+    function onLoginSuccess(pubKey, privKey) {
+      loginStatus.textContent = "تم تسجيل الدخول";
+      loginButton.style.display = "none";
+      logoutButton.style.display = "inline-block";
+      accountAddressSpan.textContent = pubKey;
+      // في البداية الرصيد صفر، ممكن ربطه مع النظام لاحقاً
+      accountBalanceSpan.textContent = "0.000000";
+      transactionFormSection.style.display = "block";
+
+      // يمكنك هنا تحميل بيانات الحساب المرتبطة من العقدة (لو عندك API)
+    }
+
+    function onLogout() {
+      loginStatus.textContent = "";
+      loginButton.style.display = "inline-block";
+      logoutButton.style.display = "none";
+      accountAddressSpan.textContent = "غير مسجل";
+      accountBalanceSpan.textContent = "0.000000";
+      transactionFormSection.style.display = "none";
+
+      // مسح حقول الدخول
+      loginPublicKeyInput.value = "";
+      loginPrivateKeyInput.value = "";
+    }
+
+    // تشغيل تحميل الحساب لو موجود تلقائيًا عند فتح الصفحة
+    window.addEventListener("DOMContentLoaded", loadAccount);
+
+    // ==== توليد مفاتيح عشوائية ====
+
+    function generateRandomHex(size) {
+      const chars = "abcdef0123456789";
+      let result = "";
+      for (let i = 0; i < size; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    }
+
+    document.getElementById("generateKeysButton").addEventListener("click", () => {
+      const privateKey = generateRandomHex(64);
+      const publicKey = generateRandomHex(64);
+      document.getElementById("privateKey").value = privateKey;
+      document.getElementById("publicKey").value = publicKey;
+    });
+
+    // ==== رسوم المعاملات وأنواع الحقول ====
+
+    const fixedFees = {
+      create: 1,
+      changeOwner: 1,
+      joinMiner: 0.000001,
+      agePoint: 0.000001,
+    };
+
+    function calculateSendFee(amount) {
+      const percentageFee = amount * 0.001 / 100; // 0.001% من المبلغ
+      const minFee = 0.000001;
+      return percentageFee < minFee ? minFee : percentageFee;
+    }
+
+    const transactionFieldsConfig = {
+      send: `
+        <label>المستلم:</label>
+        <input type="text" id="recipient" required placeholder="عنوان المستلم" />
+        <label>المبلغ:</label>
+        <input type="number" id="amount" required min="0.000001" step="0.000001" />
+      `,
+      age: `
+        <label>النقاط:</label>
+        <input type="number" id="agePoints" required min="1" />
+      `,
+      create: `
+        <label>عنوان الحساب الجديد:</label>
+        <input type="text" id="newAccount" required placeholder="العنوان الجديد" />
+      `,
+      changeOwner: `
+        <label>تأكيد عنوان المستخدم:</label>
+        <input type="text" id="confirmAccount" required placeholder="عنوان المستخدم الحالي" />
+      `,
+      joinMiner: `
+        <label>عنوان المستخدم:</label>
+        <input type="text" id="minerAccount" required placeholder="عنوان المستخدم" />
+      `,
+    };
+
+    const transactionTypeSelect = document.getElementById("transactionType");
+    const transactionFieldsDiv = document.getElementById("transactionFields");
+    const transactionFeeSpan = document.getElementById("transactionFee");
+
+    function updateTransactionFee() {
+      const type = transactionTypeSelect.value;
+      if (!type) {
+        transactionFeeSpan.textContent = "-";
+        return;
+      }
+
+      let fee = 0;
+
+      if (type === "send") {
+        const amountInput = document.getElementById("amount");
+        const amount = amountInput ? parseFloat(amountInput.value) || 0 : 0;
+        fee = calculateSendFee(amount);
+      } else if (type === "age") {
+        const pointsInput = document.getElementById("agePoints");
+        const points = pointsInput ? parseInt(pointsInput.value) || 0 : 0;
+        fee = points * fixedFees.agePoint;
+      } else if (type === "create") {
+        fee = fixedFees.create;
+      } else if (type === "changeOwner") {
+        fee = fixedFees.changeOwner;
+      } else if (type === "joinMiner") {
+        fee = fixedFees.joinMiner;
+      }
+
+      transactionFeeSpan.textContent = fee.toFixed(6);
+    }
+
+    transactionTypeSelect.addEventListener("change", () => {
+      transactionFieldsDiv.innerHTML = transactionFieldsConfig[transactionTypeSelect.value] || "";
+      transactionFeeSpan.textContent = "-";
+
+      setTimeout(() => {
+        if (transactionTypeSelect.value === "send") {
+          const amountInput = document.getElementById("amount");
+          if (amountInput) amountInput.addEventListener("input", updateTransactionFee);
+        } else if (transactionTypeSelect.value === "age") {
+          const pointsInput = document.getElementById("agePoints");
+          if (pointsInput) pointsInput.addEventListener("input", updateTransactionFee);
+        }
+        updateTransactionFee();
+      }, 0);
+    });
+
+    document.getElementById("submitTransactionButton").addEventListener("click", () => {
+      const type = transactionTypeSelect.value;
+      if (!type) {
+        alert("يرجى اختيار نوع المعاملة.");
+        return;
+      }
+      alert(`تم إرسال معاملة من نوع "${type}" برسوم ${transactionFeeSpan.textContent} LBRC للحساب ${accountAddressSpan.textContent}.`);
+      // هنا تضيف كود الإرسال للعقدة المرتبط بالمفاتيح
+    });
+  </script>
+</body>
+</html>
